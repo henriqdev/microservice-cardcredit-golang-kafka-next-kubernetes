@@ -1,16 +1,19 @@
 package process_transaction
 
 import (
+	"github.com/henriqdev/gateway-go/adapter/broker"
 	"github.com/henriqdev/gateway-go/domain/entity"
 	"github.com/henriqdev/gateway-go/domain/repository"
 )
 
 type ProcessTransaction struct {
 	Repository repository.TransactionRepository
+	Producer   broker.ProducerInterface
+	Topic      string
 }
 
-func NewProcessTransaction(repository repository.TransactionRepository) *ProcessTransaction {
-	return &ProcessTransaction{Repository: repository}
+func NewProcessTransaction(repository repository.TransactionRepository, producerInterface broker.ProducerInterface, topic string) *ProcessTransaction {
+	return &ProcessTransaction{Repository: repository, Producer: producerInterface, Topic: topic}
 }
 
 func (p *ProcessTransaction) Execute(input TransactionDtoInput) (TransactionDtoOutput, error) {
@@ -27,12 +30,15 @@ func (p *ProcessTransaction) Execute(input TransactionDtoInput) (TransactionDtoO
 	if invalidTransaction != nil {
 		return p.rejectTransaction(transaction, invalidTransaction)
 	}
+
 	return p.approveTransaction(input, transaction)
+
 }
 
 func (p *ProcessTransaction) approveTransaction(input TransactionDtoInput, transaction *entity.Transaction) (TransactionDtoOutput, error) {
 	err := p.Repository.Insert(transaction.ID, transaction.AccountID, transaction.Amount, entity.APPROVED, "")
 	if err != nil {
+		// panic(err)
 		return TransactionDtoOutput{}, err
 	}
 	output := TransactionDtoOutput{
@@ -40,16 +46,18 @@ func (p *ProcessTransaction) approveTransaction(input TransactionDtoInput, trans
 		Status:       entity.APPROVED,
 		ErrorMessage: "",
 	}
-	// err = p.publish(output, []byte(transaction.ID))
-	// if err != nil {
-	// 	return TransactionDtoOutput{}, err
-	// }
+	err = p.publish(output, []byte(transaction.ID))
+	if err != nil {
+		// panic(err)
+		return TransactionDtoOutput{}, err
+	}
 	return output, nil
 }
 
 func (p *ProcessTransaction) rejectTransaction(transaction *entity.Transaction, invalidTransaction error) (TransactionDtoOutput, error) {
 	err := p.Repository.Insert(transaction.ID, transaction.AccountID, transaction.Amount, entity.REJECTED, invalidTransaction.Error())
 	if err != nil {
+		// panic(err)
 		return TransactionDtoOutput{}, err
 	}
 	output := TransactionDtoOutput{
@@ -57,5 +65,18 @@ func (p *ProcessTransaction) rejectTransaction(transaction *entity.Transaction, 
 		Status:       entity.REJECTED,
 		ErrorMessage: invalidTransaction.Error(),
 	}
+	err = p.publish(output, []byte(transaction.ID))
+	if err != nil {
+		// panic(err)
+		return TransactionDtoOutput{}, err
+	}
 	return output, nil
+}
+
+func (p *ProcessTransaction) publish(output TransactionDtoOutput, key []byte) error {
+	err := p.Producer.Publish(output, key, p.Topic)
+	if err != nil {
+		return err
+	}
+	return nil
 }

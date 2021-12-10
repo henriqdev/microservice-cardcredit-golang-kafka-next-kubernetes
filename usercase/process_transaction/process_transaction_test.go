@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	mock_broker "github.com/henriqdev/gateway-go/adapter/broker/mock"
 	"github.com/henriqdev/gateway-go/domain/entity"
 	mock_repository "github.com/henriqdev/gateway-go/domain/repository/mock"
 	"github.com/stretchr/testify/assert"
@@ -34,10 +35,10 @@ func TestProcessTransaction_ExecuteInvalidCreditCard(t *testing.T) {
 		Insert(input.ID, input.AccountID, input.Amount, expectedOutput.Status, expectedOutput.ErrorMessage).
 		Return(nil)
 
-	// producerMock := mock_broker.NewMockProducerInterface(ctrl)
-	// producerMock.EXPECT().Publish(expectedOutput, []byte(input.ID), "transactions_result")
+	producerMock := mock_broker.NewMockProducerInterface(ctrl)
+	producerMock.EXPECT().Publish(expectedOutput, []byte(input.ID), "transactions_result")
 
-	usecase := NewProcessTransaction(repositoryMock)
+	usecase := NewProcessTransaction(repositoryMock, producerMock, "transactions_result")
 	output, err := usecase.Execute(input)
 	assert.Nil(t, err)
 	assert.Equal(t, expectedOutput, output)
@@ -67,10 +68,10 @@ func TestProcessTransaction_ExecuteRejectedTransaction(t *testing.T) {
 		Insert(input.ID, input.AccountID, input.Amount, expectedOutput.Status, expectedOutput.ErrorMessage).
 		Return(nil)
 
-	// producerMock := mock_broker.NewMockProducerInterface(ctrl)
-	// producerMock.EXPECT().Publish(expectedOutput, []byte(input.ID), "transactions_result")
+	producerMock := mock_broker.NewMockProducerInterface(ctrl)
+	producerMock.EXPECT().Publish(expectedOutput, []byte(input.ID), "transactions_result")
 
-	usecase := NewProcessTransaction(repositoryMock)
+	usecase := NewProcessTransaction(repositoryMock, producerMock, "transactions_result")
 
 	output, err := usecase.Execute(input)
 	assert.Nil(t, err)
@@ -87,7 +88,7 @@ func TestProcessTransaction_ExecuteApprovedTransaction(t *testing.T) {
 		CreditCardExpirationMonth: 12,
 		CreditCardExpirationYear:  time.Now().Year(),
 		CreditCardCVV:             123,
-		Amount:                    850,
+		Amount:                    900,
 	}
 	expectedOutput := TransactionDtoOutput{
 		ID:           "1",
@@ -102,11 +103,10 @@ func TestProcessTransaction_ExecuteApprovedTransaction(t *testing.T) {
 		Insert(input.ID, input.AccountID, input.Amount, expectedOutput.Status, expectedOutput.ErrorMessage).
 		Return(nil)
 
-	// producerMock := mock_broker.NewMockProducerInterface(ctrl)
-	// producerMock.EXPECT().Publish(expectedOutput, []byte(input.ID), "transactions_result")
+	producerMock := mock_broker.NewMockProducerInterface(ctrl)
+	producerMock.EXPECT().Publish(expectedOutput, []byte(input.ID), "transactions_result")
 
-	usecase := NewProcessTransaction(repositoryMock)
-
+	usecase := NewProcessTransaction(repositoryMock, producerMock, "transactions_result")
 	output, err := usecase.Execute(input)
 	assert.Nil(t, err)
 	assert.Equal(t, expectedOutput, output)
